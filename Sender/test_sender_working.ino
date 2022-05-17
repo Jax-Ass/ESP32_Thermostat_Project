@@ -1,4 +1,13 @@
 /*
+ * Title: Sender
+ * 
+ * Author: Johannes Hettinga
+ * Version: V1
+ * Date: 17/5/2022
+ */
+
+
+/*
    --------------------------------------------------------------------
    |                              Init                                |
    --------------------------------------------------------------------
@@ -173,14 +182,14 @@ void loop() {
   
 
   // Send message via ESP-NOW
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+  esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
 
   if (delivery == 1) {
     homeScreen(("ID: " + String(myData.id)), "100%", String(myData.x, 0), String(myData.y, 0), "Sent!" , "0.9.0");
     retries = 0;
   } else while (delivery == 0) {
       homeScreen(("ID: " + String(myData.id)), "100%", String(myData.x, 0), String(myData.y, 0), ("Retrying: " + String(retries)), "0.9.0");
-      esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+      esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
       retries++; 
       delay(2000);    
       esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
