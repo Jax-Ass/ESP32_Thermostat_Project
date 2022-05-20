@@ -16,6 +16,10 @@
 // Connection
 #include <esp_now.h>
 #include <WiFi.h>
+/*
+#include "time.h"
+#define CHANNEL 0
+*/
 
 // OLED
 #include <Wire.h>
@@ -41,6 +45,12 @@ typedef struct struct_message {
 } struct_message;
 struct_message myData;
 
+float tboard1X;
+float tboard1Y;
+float tboard2X;
+float tboard2Y;
+int tID;
+
 /*
    --------------------------------------------------------------------
    |                            Config                                |
@@ -49,17 +59,20 @@ struct_message myData;
 
 // Boards
 struct_message board1;
-//struct_message board2;
+struct_message board2;
 //struct_message board3;
 
 // Create an array with all the structures
-struct_message boardsStruct[1] = {board1};
+struct_message boardsStruct[2] = {board1, board2};
 
-float tboard1X;
-float tboard1Y;
-float tboard2X;
-float tboard2Y;
-int tID;
+/*
+// NTP time config
+const char* ssid       = "Garage-netwerk";
+const char* password   = "Garage1969";
+const char* ntpServer = "europe.pool.ntp.org";
+const long  gmtOffset_sec = 3600;
+const int   daylightOffset_sec = 3600;
+*/
 
 /*
    --------------------------------------------------------------------
@@ -140,6 +153,17 @@ void writeFile(fs::FS &fs, const char * path, const char * message) {
 }
 
 /*
+void printLocalTime()
+{
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+}
+*/
+/*
    ---------------------------------------------------------------------
    |                              Setup                                |
    ---------------------------------------------------------------------
@@ -148,12 +172,22 @@ void writeFile(fs::FS &fs, const char * path, const char * message) {
 void setup() {
   Serial.begin(115200);
   WiFi.mode(WIFI_STA);
-
+  /*
+  Serial.printf("Connecting to %s ", ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+  }
+  Serial.println(" CONNECTED");
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  printLocalTime();
+*/
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-
+  
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
@@ -172,16 +206,7 @@ void setup() {
     Serial.println("Card Mount Failed");
     return;
   }
-  uint8_t cardType = SD.cardType();
-  if (cardType == CARD_NONE) {
-    Serial.println("No SD card attached");
-    return;
-  }
-  Serial.println("Initializing SD card...");
-  if (!SD.begin(SD_CS)) {
-    Serial.println("ERROR - SD card initialization failed!");
-    return;    // init failed
-  }
+  
   File file = SD.open("/data.csv");
   if (!file) {
     Serial.println("File doens't exist");
@@ -192,8 +217,7 @@ void setup() {
     Serial.println("File already exists");
   }
   file.close();
-
-
+  
   esp_now_register_recv_cb(OnDataRecv);
 }
 
@@ -204,43 +228,51 @@ void setup() {
 */
 
 void loop() {
-
+  
   float board1X = boardsStruct[0].x;
   float board1Y = boardsStruct[0].y;
   float board2X = boardsStruct[1].x;
   float board2Y = boardsStruct[1].y;
 
 
-  if(tboard1X != board1X ||
-     tboard1Y != board1Y ||
-     tboard2X != board2X ||
-     tboard2Y != board2Y) {
-    String msg("Board 1," + String(board1X) + "," + String(board1Y) + "\r\n");
+  if (tboard1X != board1X ||
+      tboard1Y != board1Y ||
+      tboard2X != board2X ||
+      tboard2Y != board2Y) {
 
-  File file = SD.open("/data.csv");
-  if (file) {
+
+    float temp[] = {board1X, board2X};
+    float humi[] = {board1Y, board2Y};
+    int nr = tID - 1;
+    String IDstring = ("ID: " + String(tID, DEC));
+
+    String msg("Board " + (String(tID, DEC)) + "," + (String(temp[nr], 2)) + "," + (String(temp[nr], 2)) + "\r\n");
+
+               File file = SD.open("/data.csv");
+    if (file) {
     appendFile(SD, "/data.csv", msg.c_str());
+    }
+    file.close();
+    
+    // printLocalTime();
+
+
+
+    Serial.println(tID);
+    Serial.println(IDstring);
+    Serial.println(nr);
+    Serial.println(temp[nr]);
+    Serial.println(humi[nr]);
+
+    display.clearDisplay();
+    drawCentreString((IDstring), 64, 0);
+    drawCentreString(String(temp[nr], 1), 64, 16);
+    drawCentreString(String(humi[nr], 1), 64, 32);
+    display.display();
+
   }
-  file.close();
 
-  float temp[] = {board1X, board2X};
-  float humi[] = {board1Y, board2Y};
-  int nr = tID -1;
-  
-  Serial.println(tID);
-  Serial.println(nr);
-  Serial.println(temp[nr]);
-  Serial.println(humi[nr]);
 
-  display.clearDisplay();
-  drawCentreString(("ID: " + tID), 64, 0);
-  drawCentreString(String(temp[nr], 1), 64, 16);
-  drawCentreString(String(humi[nr], 1), 64, 32);
-  display.display();
-  
-  } 
-
-  
 
   tboard1X = board1X;
   tboard1Y = board1Y;
