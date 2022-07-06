@@ -2,8 +2,8 @@
  * Title: Sender
  * 
  * Author: Johannes Hettinga
- * Version: V1
- * Date: 17/5/2022
+ * Version: V1.0
+ * Date: 6/7/2022
  */
 
 
@@ -39,6 +39,15 @@ typedef struct struct_message {
   float y;
 } struct_message;
 struct_message myData;
+
+// Temp struct for retry part
+typedef struct tstruct_message {
+  int id;
+  float x;
+  float y;
+} tstruct_message;
+tstruct_message tmyData;
+
 esp_now_peer_info_t peerInfo;
 
 int retries = 0;
@@ -179,7 +188,10 @@ void loop() {
   myData.id = 1;
   myData.x = temp;
   myData.y = humi;
-  
+
+  tmyData.id = myData.id;
+  tmyData.x = myData.x;
+  tmyData.y = myData.y;
 
   // Send message via ESP-NOW
   esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
@@ -188,13 +200,11 @@ void loop() {
     homeScreen(("ID: " + String(myData.id)), "100%", String(myData.x, 0), String(myData.y, 0), "Sent!" , "0.9.0");
     retries = 0;
   } else while (delivery == 0) {
-      homeScreen(("ID: " + String(myData.id)), "100%", String(myData.x, 0), String(myData.y, 0), ("Retrying: " + String(retries)), "0.9.0");
-      esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+      homeScreen(("ID: " + String(tmyData.id)), "100%", String(tmyData.x, 0), String(tmyData.y, 0), ("Retrying: " + String(retries)), "0.9.0");
+      esp_now_send(broadcastAddress, (uint8_t *) &tmyData, sizeof(tmyData));
       retries++; 
-      delay(2000);    
-      esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
-      delay(100);
+      delay(5000);          
   }
-  delay(5000);
+  delay(15000);
  
 }
