@@ -2,8 +2,8 @@
    Title: Reciever
 
    Author: Johannes Hettinga
-   Version: V1
-   Date: 17/5/2022
+   Version: V1.0
+   Date: 6/7/2022
 */
 
 
@@ -16,10 +16,10 @@
 // Connection
 #include <esp_now.h>
 #include <WiFi.h>
-/*
-#include "time.h"
-#define CHANNEL 0
-*/
+
+// RTC
+#include "RTClib.h"       //to show time
+RTC_DS3231 rtc;
 
 // OLED
 #include <Wire.h>
@@ -65,14 +65,14 @@ struct_message board2;
 // Create an array with all the structures
 struct_message boardsStruct[2] = {board1, board2};
 
-/*
+
 // NTP time config
 const char* ssid       = "Garage-netwerk";
 const char* password   = "Garage1969";
 const char* ntpServer = "europe.pool.ntp.org";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
-*/
+
 
 /*
    --------------------------------------------------------------------
@@ -153,17 +153,6 @@ void writeFile(fs::FS &fs, const char * path, const char * message) {
 }
 
 /*
-void printLocalTime()
-{
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
-    Serial.println("Failed to obtain time");
-    return;
-  }
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-}
-*/
-/*
    ---------------------------------------------------------------------
    |                              Setup                                |
    ---------------------------------------------------------------------
@@ -171,23 +160,15 @@ void printLocalTime()
 
 void setup() {
   Serial.begin(115200);
-  WiFi.mode(WIFI_STA);
-  /*
-  Serial.printf("Connecting to %s ", ssid);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-  }
-  Serial.println(" CONNECTED");
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  printLocalTime();
-*/
+  WiFi.mode(WIFI_AP_STA);
+  delay(2000);
+
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-  
+  esp_now_register_recv_cb(OnDataRecv);
+
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
@@ -206,7 +187,7 @@ void setup() {
     Serial.println("Card Mount Failed");
     return;
   }
-  
+
   File file = SD.open("/data.csv");
   if (!file) {
     Serial.println("File doens't exist");
@@ -217,8 +198,14 @@ void setup() {
     Serial.println("File already exists");
   }
   file.close();
-  
-  esp_now_register_recv_cb(OnDataRecv);
+
+  if (! rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    while (1);
+  }
+
+  rtc.adjust(DateTime(__DATE__, __TIME__));
+
 }
 
 /*
@@ -228,12 +215,27 @@ void setup() {
 */
 
 void loop() {
-  
+
+  DateTime now = rtc.now();
+  /*
+    Serial.print("Sec: ");
+    Serial.print(now.second(), DEC);
+    Serial.print("Min: ");
+    Serial.print(now.minute(), DEC);
+    Serial.print("Hour: ");
+    Serial.print(now.hour(), DEC);
+    Serial.print("Day: ");
+    Serial.print(now.day(), DEC);
+    Serial.print("Month: ");
+    Serial.print(now.month(), DEC);
+    Serial.print("Year: ");
+    Serial.print(now.year(), DEC);
+  */
+
   float board1X = boardsStruct[0].x;
   float board1Y = boardsStruct[0].y;
   float board2X = boardsStruct[1].x;
   float board2Y = boardsStruct[1].y;
-
 
   if (tboard1X != board1X ||
       tboard1Y != board1Y ||
@@ -246,16 +248,15 @@ void loop() {
     int nr = tID - 1;
     String IDstring = ("ID: " + String(tID, DEC));
 
-    String msg("Board " + (String(tID, DEC)) + "," + (String(temp[nr], 2)) + "," + (String(temp[nr], 2)) + "\r\n");
+    String Timestamp = ((String(now.hour(), DEC)) + ":" + (String(now.minute(), DEC)) + "," + (String(now.day(), DEC)) + "-" + (String(now.month(), DEC)) + "-" + (String(now.year(), DEC)));
 
-               File file = SD.open("/data.csv");
+    String msg("Board " + (String(tID, DEC)) + "," + (String(temp[nr], 2)) + "," + (String(temp[nr], 2)) + "," + Timestamp + "\r\n");
+
+    File file = SD.open("/data.csv");
     if (file) {
-    appendFile(SD, "/data.csv", msg.c_str());
+      appendFile(SD, "/data.csv", msg.c_str());
     }
     file.close();
-    
-    // printLocalTime();
-
 
 
     Serial.println(tID);
@@ -263,6 +264,8 @@ void loop() {
     Serial.println(nr);
     Serial.println(temp[nr]);
     Serial.println(humi[nr]);
+    Serial.println(Timestamp);
+    Serial.println(msg);
 
     display.clearDisplay();
     drawCentreString((IDstring), 64, 0);
